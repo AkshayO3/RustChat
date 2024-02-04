@@ -1,15 +1,12 @@
 #[macro_use] extern crate rocket;
 
-use std::net::Shutdown;
-use rocket::{get, launch, routes};
-use rocket::serde::{Deserialize, Serialize};
-use rocket::tokio::sync::broadcast::{Sender, error::RecvError, channel};
+use rocket::{State, Shutdown};
+use rocket::fs::{relative, FileServer};
 use rocket::form::Form;
-use rocket::fs::{FileServer, relative};
+use rocket::response::stream::{EventStream, Event};
+use rocket::serde::{Serialize, Deserialize};
+use rocket::tokio::sync::broadcast::{channel, Sender, error::RecvError};
 use rocket::tokio::select;
-use rocket::futures::SinkExt;
-use rocket::response::stream::{Event,EventStream};
-use rocket::State;
 
 #[derive(Debug,Clone,FromForm,Serialize,Deserialize)]
 
@@ -28,18 +25,19 @@ fn post(form:Form<Message>,queue:&State<Sender<Message>>){
 }
 
 #[get("/events")]
-async fn events(queue:&State<Sender<Message>>,mut end:Shutdown) -> EventStream![]{
+async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> EventStream![] {
     let mut rx = queue.subscribe();
-    EventStream!{
-        loop{
-            let msg = select!{
-                msg = rx.recv() => match msg{
+    EventStream! {
+        loop {
+            let msg = select! {
+                msg = rx.recv() => match msg {
                     Ok(msg) => msg,
                     Err(RecvError::Closed) => break,
                     Err(RecvError::Lagged(_)) => continue,
                 },
                 _ = &mut end => break,
             };
+
             yield Event::json(&msg);
         }
     }
