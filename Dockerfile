@@ -1,12 +1,28 @@
-FROM rust:1.74.1
+# syntax=docker/dockerfile:1
 
-ENV ROCKET_ADDRESS=0.0.0.0
-ENV ROCKET_PORT=6666
+# Use the official Rust image as the base image
+FROM rust:1.75.0 AS builder
 
+# Set the working directory inside the container
 WORKDIR /app
+
+# Copy the entire project to the container
 COPY . .
 
-RUN rustup default nightly
-RUN cargo build
+# Build the application
+RUN cargo build --release
 
-CMD ["cargo", "run"]
+# Create a new image without the build environment
+FROM debian:bullseye-slim AS final
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the built binary from the builder stage
+COPY --from=builder /app/target/release/rustchat /app/rustchat
+
+# Expose the port your Rocket application will run on
+EXPOSE 3000
+
+# Command to run your application
+CMD ["/app/rustchat"]
